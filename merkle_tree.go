@@ -80,9 +80,9 @@ func (n *Node) calculateNodeHash() ([]byte, error) {
 
 //NewTree creates a new Merkle Tree using the content cs.
 func NewTree(cs []Content) (*MerkleTree, error) {
-	var defaultHashStrategy = sha256.New
+	var hashStrategy = defaultHashStrategy()
 	t := &MerkleTree{
-		hashStrategy: defaultHashStrategy,
+		hashStrategy: hashStrategy,
 	}
 	root, leafs, err := buildWithContent(cs, t)
 	if err != nil {
@@ -311,4 +311,42 @@ func (m *MerkleTree) String() string {
 		s += "\n"
 	}
 	return s
+}
+
+func defaultHashStrategy() func() hash.Hash {
+	return sha256.New
+}
+
+// VerifyContentWithPath verifies content using path information comming from GetMerklePath function, and Merkle root.
+func VerifyContentWithPath(merkleRoot []byte, content Content, path [][]byte, index []int64) (bool, error) {
+
+	if len(path) != len(index) {
+		return false, fmt.Errorf("path or index argument is wrong")
+	}
+
+	calculatedRoot, err := content.CalculateHash()
+	if err != nil {
+		return false, err
+	}
+
+	hashStrategy := defaultHashStrategy()
+
+	for i := 0; i < len(path); i++ {
+
+		h := hashStrategy()
+		if index[i] == 0 {
+			_, err = h.Write(append(path[i], calculatedRoot...))
+			calculatedRoot = h.Sum(nil)
+		} else {
+			_, err = h.Write(append(calculatedRoot, path[i]...))
+			calculatedRoot = h.Sum(nil)
+		}
+
+		if err != nil {
+			return false, err
+		}
+
+	}
+
+	return bytes.Equal(merkleRoot, calculatedRoot), nil
 }
